@@ -7,7 +7,7 @@ PREDICTIONG_FUEL:
 ![alt text](image-3.png)
 ![alt text](image-4.png)
 
-````markdown
+
 # GraphLogic — Project Documentation (AI/ML Engineer)
 
 Repository: /home/fadher/CODING/AI_ML_Files/GraphLogic
@@ -259,15 +259,5 @@ Suggestions:
 
 ---
 
-## License & credits
 
-- No license specified — add an appropriate license if you plan to share or reuse code publicly (MIT/Apache-2.0 recommended).
 
----
-
-If you want, I can:
-- Generate a requirements.txt pinned to tested versions.
-- Create safe demo scripts converting key notebook cells to Python modules (training scripts + evaluation).
-- Add model checkpointing and evaluation scripts.
-
-````
