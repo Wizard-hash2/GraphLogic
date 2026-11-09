@@ -1,263 +1,208 @@
-XOR
+# GraphLogic
+
+GraphLogic is a notebook-based collection of PyTorch experiments. It progresses
+from scalar computational graphs and automatic differentiation to binary
+classification, tabular regression, and a structured MNIST training pipeline
+implemented with PyTorch Lightning.
+
+The project is primarily educational: each notebook exposes a different part
+of the model-training stack rather than presenting a single packaged
+application.
+
+## What the project demonstrates
+
+- How PyTorch represents forward computations and calculates gradients with
+  autograd.
+- Why nonlinear hidden layers are required to model the XOR decision boundary.
+- How to define models with `nn.Sequential` and custom `nn.Module` classes.
+- How trainable parameters, Xavier/Glorot initialization, losses, optimizers,
+  mini-batches, and validation metrics fit together.
+- How to prepare mixed numerical and categorical tabular data for a neural
+  network.
+- How PyTorch Lightning separates a model from its data module and standardizes
+  training, validation, and testing steps.
+
+## Repository map
+
+| Path | Role |
+| --- | --- |
+| [`computational_graph.ipynb`](./computational_graph.ipynb) | Computational graphs, gradients, `nn.Module`, and initialization |
+| [`XOR_classification.ipynb`](./XOR_classification.ipynb) | Nonlinear binary classification and custom layers |
+| [`predicting_fuel_inefficiency_project.ipynb`](./predicting_fuel_inefficiency_project.ipynb) | Auto MPG feature engineering and regression |
+| [`pytorch_lightinig.ipynb`](./pytorch_lightinig.ipynb) | PyTorch Lightning MLP and MNIST `DataModule` |
+| [`classifying_MNIST_handwritten_digits.ipynb`](./classifying_MNIST_handwritten_digits.ipynb) | Empty placeholder notebook currently present in the repository |
+| [`test.py`](./test.py) | Separate OpenAI-compatible chat-completions client probe; not part of the notebook model pipeline |
+| [`MNIST/raw/`](./MNIST/raw/) | Local raw MNIST files tracked with the repository |
+| [`image.png`](./image.png), [`image-1.png`](./image-1.png), [`image-2.png`](./image-2.png), [`image-3.png`](./image-3.png), [`image-4.png`](./image-4.png) | Figures used in the project documentation |
+
+## Core workflow
+
+The notebooks follow the same general training pattern:
+
+1. Construct or load a dataset.
+2. Convert features and targets to PyTorch tensors.
+3. Define a model as a sequence of layers or as a custom module.
+4. Run a forward pass to obtain predictions.
+5. Compute a task-specific loss.
+6. Call `loss.backward()` to populate parameter gradients.
+7. Update parameters with an optimizer and clear gradients.
+8. Track losses and task metrics over epochs.
+
+The lower-level notebooks show these operations explicitly. The Lightning
+notebook expresses the same lifecycle through `training_step`,
+`validation_step`, `test_step`, and `configure_optimizers`.
+
+## Computational graphs and autograd
+
+[`computational_graph.ipynb`](./computational_graph.ipynb) begins with scalar
+compositions and then uses tensors with `requires_grad=True`. A representative
+linear computation is:
+
+```text
+z = w x + b
+L = (y - z)^2
+```
+
+Calling `L.backward()` applies the chain rule through the recorded operations
+and exposes derivatives such as `w.grad` and `b.grad`. The notebook then
+connects this mechanism to `torch.nn` models, binary cross-entropy, and
+stochastic gradient descent.
+
+It also demonstrates Xavier initialization through
+`nn.init.xavier_normal_` and `nn.init.xavier_uniform_`. These initializers
+scale starting weights according to the dimensions of the layer, helping keep
+activations and gradients in a useful range at the beginning of training.
+
+## XOR classification
+
+[`XOR_classification.ipynb`](./XOR_classification.ipynb) creates 200 two-feature
+points uniformly in `[-1, 1)` and assigns a binary label according to the sign
+of the feature product:
+
+```text
+y = 1  if  x₀ x₁ >= 0
+y = 0  otherwise
+```
+
+The notebook contrasts a model without hidden nonlinearities with a multilayer
+perceptron:
+
+```text
+Linear(2, 4) → ReLU → Linear(4, 4) → ReLU
+→ Linear(4, 1) → Sigmoid
+```
+
+The classifier uses `nn.BCELoss`, SGD, `TensorDataset`, and `DataLoader`.
+Training and validation loss/accuracy histories are plotted, and
+`mlxtend.plotting.plot_decision_regions` is used to visualize the learned
+boundary.
+
+The notebook also implements:
+
+- `MyModule`, a custom `nn.Module` that assembles layers with `ModuleList`.
+- `NoisyLinear`, which registers weights and biases as `nn.Parameter` objects,
+  initializes them with Xavier initialization, and adds Gaussian input noise
+  before the matrix multiplication:
+
+  ```text
+  x̃ = x + ε,       ε ~ Normal(0, σ)
+  output = x̃W + b
+  ```
+
+These examples make parameter registration, the `forward` method, and
+stochastic layer behavior explicit.
+
 ![alt text](image.png)
 ![alt text](image-1.png)
 ![alt text](image-2.png)
 
-PREDICTIONG_FUEL:
+## Auto MPG regression
+
+[`predicting_fuel_inefficiency_project.ipynb`](./predicting_fuel_inefficiency_project.ipynb)
+uses the UCI Auto MPG dataset. The notebook reads the data from the URL already
+embedded in the notebook:
+
+<http://archive.ics.uci.edu/ml/machine-learning-databases/auto-mpg/auto-mpg.data>
+
+The target is `MPG`. The input columns are `Cylinders`, `Displacement`,
+`Horsepower`, `Weight`, `Acceleration`, `Model Year`, and `Origin`.
+Rows containing `?` are treated as missing and removed. The data is split with
+`sklearn.model_selection.train_test_split(test_size=0.2, random_state=2)`.
+
+Feature preparation has three parts:
+
+1. The five continuous vehicle measurements are standardized with statistics
+   computed from the training set:
+
+   ```text
+   x' = (x - mean_train) / std_train
+   ```
+
+2. `Model Year` is bucketized with `torch.bucketize` using boundaries
+   `[73, 76, 79]`.
+3. `Origin` is converted to a one-hot tensor with
+   `torch.nn.functional.one_hot`.
+
+The resulting numerical and categorical features are concatenated before being
+fed to a dynamically assembled regressor:
+
+```text
+Linear(input_size, 8) → ReLU → Linear(8, 4)
+→ ReLU → Linear(4, 1)
+```
+
+Training uses batches of 8, mean squared error (`nn.MSELoss`), SGD with a
+learning rate of `0.001`, and 200 epochs. The notebook logs the average
+training loss periodically.
+
 ![alt text](image-3.png)
 ![alt text](image-4.png)
 
+## Lightning MNIST pipeline
 
-# GraphLogic — Project Documentation (AI/ML Engineer)
+[`pytorch_lightinig.ipynb`](./pytorch_lightinig.ipynb) contains the repository's
+MNIST implementation. `MnistDataModule` wraps
+`torchvision.datasets.MNIST`, converts images with `transforms.ToTensor()`, and
+creates:
 
-Repository: /home/fadher/CODING/AI_ML_Files/GraphLogic
+- 55,000 training examples and 5,000 validation examples from the training
+  split using `random_split` with a manually seeded generator.
+- The standard MNIST test split.
+- `DataLoader` instances with batch size 64.
 
-This document describes the full project, notebooks, code organization, data handling, modelling decisions, training procedures, experiment logs and reproducibility instructions. test.py is intentionally omitted.
+`MultiLayerPerceptron` flattens each `1 × 28 × 28` image and builds hidden
+layers from the configurable tuple `(32, 16)`, followed by a 10-class output
+layer:
 
----
-
-## Project summary
-
-GraphLogic is a collection of experiments  notebooks focused on:
-- PyTorch fundamentals and computational graph mechanics
-- Solving the XOR classification problem with custom architectures and layers
-- A small applied regression case: predicting fuel efficiency (auto-mpg dataset)
-- A PyTorch Lightning example for structured training (MNIST MLP)
-
-The code emphasizes:
-- Explicit forward/backward passes and autograd
-- Network initialization and weight control
-- Custom layer implementation (NoisyLinear)
-- Data preprocessing pipelines and feature engineering (bucketization, one-hot encoding)
-- Lightweight training loops (vanilla PyTorch) and a LightningModule example for production-ready training
-
----
-
-## Repository layout (relevant files)
-
-- computational_graph.ipynb — autograd, gradient computation, nn basics, initialization examples
-- XOR_classification.ipynb — dataset generation, model experiments, training loop, custom Module and NoisyLinear, decision boundary plotting
-- predicting_fuel_inefficiency_project.ipynb — data ingestion (UCI auto-mpg), preprocessing, feature columns, DNN regression training
-- pytorch_lightinig.ipynb — PyTorch Lightning MLP and DataModule for MNIST
-- README.md — this file
-- image assets referenced by notebooks (embedded figures)
-
----
-
-## Environment & dependencies
-
-Recommended Python environment (Linux):
-- Python >= 3.8 (3.9/3.10 recommended)
-- Create venv:
-  - python3 -m venv .venv
-  - source .venv/bin/activate
-- Install dependencies:
-  - pip install -r requirements.txt
-
-Example requirements (pin versions in production):
-```
-numpy
-pandas
-matplotlib
-scikit-learn
-torch>=1.12
-torchvision
-pytorch-lightning
-torchmetrics
-mlxtend
-notebook
-ipykernel
+```text
+Flatten → Linear(784, 32) → ReLU → Linear(32, 16)
+→ ReLU → Linear(16, 10)
 ```
 
-Notes:
-- If using CUDA, install the matching torch + torchvision with the appropriate CUDA version.
-- Use python-dotenv for environment config if adding secrets (not needed here).
+The model returns logits and uses
+`torch.nn.functional.cross_entropy` for classification. Predictions are formed
+with `torch.argmax(logits, dim=1)`. `torchmetrics.Accuracy` tracks training,
+validation, and test accuracy, while Adam (`lr=0.001`) is returned from
+`configure_optimizers`.
 
----
+## Technologies and libraries
 
-## Reproducibility & best practices
+| Area | Technologies used in the repository |
+| --- | --- |
+| Core tensor and neural-network APIs | Python, PyTorch (`torch`, `torch.nn`, `torch.optim`) |
+| Data handling | NumPy, pandas, `TensorDataset`, `DataLoader` |
+| Classical ML utility | scikit-learn (`train_test_split`) |
+| Visualization | Matplotlib, mlxtend decision-region plotting |
+| Image classification | torchvision MNIST and transforms |
+| Training framework and metrics | PyTorch Lightning, torchmetrics |
+| Separate client probe | `openai` Python client in [`test.py`](./test.py) |
 
-- Seeds: notebooks set seeds (torch.manual_seed, numpy.random.seed) — keep seeds consistent across experiments.
-- Data splits: use fixed random_state for train/test splits to reproduce results.
-- Logging: capture loss/accuracy per epoch; save model checkpoints and optimizer state_dict for exact reproducibility.
-- Hardware: document CPU vs GPU runs; GPU will change training timing and nondeterministic cudnn ops can affect exact float results.
-- Version control: add `.vscode/`, `.ipynb_checkpoints/`, `.venv/`, and any credentials to `.gitignore`.
+The repository does not include a dependency manifest; the authoritative
+library usage is the import statements in the notebooks and Python source.
 
----
+## References present in the project
 
-## Notebooks — detailed notes
-
-### computational_graph.ipynb
-Purpose:
-- Demonstrate how PyTorch builds computational graphs and computes gradients.
-
-Key elements:
-- Simple scalar/compositional function examples to show forward/backward behaviour.
-- Use of `requires_grad` to enable autograd.
-- Illustration of `loss.backward()` and reading `.grad` on tensors.
-- Weight initialization with Xavier (Glorot) initializers using `nn.init.xavier_*`.
-
-Takeaways:
-- Manual construction of a forward pass and explicit backward call is useful for debugging gradient flows.
-- Proper initialization influences early training dynamics.
-
-Suggested experiments:
-- Compare xavier_normal_ vs xavier_uniform_ and observe gradient magnitudes.
-- Visualize gradient norms per-parameter during training.
-
----
-
-### XOR_classification.ipynb
-Purpose:
-- Solve XOR classification as a canonical test of non-linear model capacity.
-
-Data pipeline:
-- Generate N=200 samples uniformly in [-1,1]^2.
-- Labels: y = 1 if x0 * x1 >= 0 else 0.
-- Split: first 100 samples used for training, remainder for validation (not ideal — prefer random split; keep seed).
-
-Model implementations:
-- Baseline sequential MLP: Linear(2,4)->ReLU->Linear(4,4)->ReLU->Linear(4,1)->Sigmoid
-- Custom Module (`MyModule`) built from ModuleList for flexibility.
-- Custom layer `NoisyLinear`:
-  - Adds Gaussian noise to inputs during training (controlled by noise_stddev).
-  - Uses `nn.Parameter` for weights and biases and Xavier initialization.
-  - Used to regularize and explore stochastic perturbations.
-
-Training loop:
-- Loss: Binary Cross Entropy (`nn.BCELoss`).
-- Optimizer: SGD (lr variable; experiments use 0.001–0.015).
-- Batch size: small (2) to simulate SGD updates.
-- Epochs: 200 in experiments.
-- Metrics: epoch-wise train/validation loss and accuracy; decision boundary plotted using mlxtend.
-
-Implementation considerations & issues observed:
-- Original split used the first 100 points as train — prefer random split with fixed seed for robust validation.
-- Small batch size increases noise in gradients; useful in toy experiments but unstable for real problems.
-- Using `Sigmoid` + `BCELoss` requires stable logits — consider `BCEWithLogitsLoss` with raw logits to improve stability.
-
-Suggested improvements:
-- Replace final Sigmoid + BCELoss with raw logits + BCEWithLogitsLoss.
-- Use DataLoader for both train and validation datasets with proper shuffle and deterministic split.
-- Experiment with different hidden sizes and depth to measure capacity vs overfitting.
-
----
-
-### predicting_fuel_inefficiency_project.ipynb
-Purpose:
-- Regression task predicting MPG using the UCI auto-mpg dataset.
-
-Data ingestion & cleaning:
-- Source: http://archive.ics.uci.edu/ml/machine-learning-databases/auto-mpg/auto-mpg.data
-- Column names: ['MPG','Cylinders','Displacement','Horsepower','Weight','Acceleration','Model Year','Origin']
-- Handling missing values: `na_values="?"` then `dropna()`.
-- Train/test split: scikit-learn `train_test_split(test_size=0.2, random_state=2)`.
-
-Feature engineering:
-- Numerical columns normalized using training statistics (mean/std) — applied to both train and test using train stats (correct).
-- Bucketize Model Year: boundaries [73,76,79] using `torch.bucketize`, then treat as numeric bucket feature.
-- One-hot encode Origin (categorical) using `torch.nn.functional.one_hot`.
-- Final features concatenated: normalized numeric columns + one-hot origin vector.
-
-Model architecture:
-- DNN regressor constructed programmatically from `hidden_units = [8, 4]`:
-  - Flatten-like structure for tabular input: Linear(input_size, 8) -> ReLU -> Linear(8, 4) -> ReLU -> Linear(4,1)
-- Loss: MSE (`nn.MSELoss`) for regression.
-- Optimizer: SGD (lr=0.001 used); experiments log per-epoch average training loss.
-
-Training loop specifics:
-- Batch size: 8.
-- Epochs: 200 (print loss every 20 epochs).
-- Training uses `loss.backward()` then `optimizer.step()` and `optimizer.zero_grad()`.
-
-Practical notes & suggestions:
-- Standardize target variable (MPG) optionally for numerical stability, or use relative error metrics (MAE, RMSE).
-- Use validation split and save best model based on validation loss; current script prints training loss only.
-- Consider Adam optimizer (better default), learning rate schedules, weight decay.
-- Evaluate model on test set at the end with RMSE and MAE; produce residual plots to inspect bias.
-- If horsepower contains missing values (sometimes as '?'), ensure robust imputation (median or KNN).
-
----
-
-### pytorch_lightinig.ipynb
-Purpose:
-- Demonstrate a production-style training module with PyTorch Lightning (PL) and a DataModule for MNIST.
-
-Key components:
-- `MultiLayerPerceptron` (pl.LightningModule):
-  - Configurable hidden_units; flatten input; final linear output for 10 classes.
-  - Uses `torchmetrics.Accuracy` for train/valid/test metrics.
-  - Implements `training_step`, `validation_step`, `test_step`, and `configure_optimizers`.
-- `MnistDataModule` (pl.LightningDataModule):
-  - Downloads MNIST, creates train/val/test split and DataLoaders.
-
-Advantages:
-- PL abstracts training loop, checkpointing and logging.
-- Clear separation of model and data pipeline; easier to scale experiments, enable distributed training, and integrate callbacks (EarlyStopping, ModelCheckpoint).
-
-Suggestions:
-- Use `BCEWithLogitsLoss` only for binary; for multi-class use `CrossEntropyLoss` with raw logits (no Sigmoid/Softmax).
-- Log metrics via `self.log(..., on_epoch=True, prog_bar=True)` for consistent tracking.
-- Add callbacks for early stopping and checkpointing by monitoring validation loss/accuracy.
-
----
-
-## Experiment logs & results (brief)
-
-- XOR experiments: using a small MLP with two hidden layers and ReLU achieved training/validation accuracy patterns shown in notebook plots. NoisyLinear introduced stochasticity that can regularize training.
-- Fuel efficiency: DNN with hidden units [8,4] trained with SGD produced convergent training losses (noted in notebook prints). Further tuning recommended for test RMSE and feature engineering.
-- Lightning MNIST: PL module architecture and DataModule are functional; recommended hyperparameter sweep (hidden sizes, lr, optimizer type) and early stopping.
-
----
-
-## Recommended scripts & developer workflow
-
-1. Setup:
-   - python3 -m venv .venv
-   - source .venv/bin/activate
-   - pip install -r requirements.txt
-
-2. Running notebooks:
-   - Launch Jupyter:
-     - jupyter lab
-   - Or convert notebooks to scripts for CLI runs:
-     - jupyter nbconvert --to script XOR_classification.ipynb
-
-3. Save best models:
-   - In training loops, add:
-     - torch.save(model.state_dict(), "models/model_epochXX.pth")
-     - Save optimizer state for exact resume.
-
-4. Add experiment tracking:
-   - Integrate Weights & Biases / TensorBoard for organized hyperparameter sweeps and artifact tracking.
-
----
-
-## Short checklist before productionizing
-
-- [ ] Replace any hard-coded credentials (none included here).
-- [ ] Ensure deterministic splits and seed settings are documented.
-- [ ] Add evaluation notebooks with test metrics and calibration/residual analysis.
-- [ ] Add unit tests for custom layers (NoisyLinear output shapes, parameter registration).
-- [ ] Add a Dockerfile or environment.yml for reproducible compute environment.
-
----
-
-## Security & hygiene
-
-- Do not commit API keys or ngrok URLs.
-- Add `.env` to `.gitignore` if using env vars for local tunnels or secrets.
-- Rotate any keys that may have been exposed earlier.
-
----
-
-## Next steps / research ideas
-
-- For XOR: explore Bayesian neural nets, dropout, and deeper nets to study capacity vs regularization.
-- For auto-mpg: feature interactions, polynomial features, tree-based models (XGBoost) for baseline comparison, SHAP explanations for feature importance.
-- For Lightning: enable multi-GPU training, mixed precision, learning rate finder and schedulers.
-
----
-
-
-
+- [UCI Auto MPG dataset](http://archive.ics.uci.edu/ml/machine-learning-databases/auto-mpg/auto-mpg.data)
+- [PyTorch](https://pytorch.org/) APIs used throughout the notebooks
+- [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/) APIs used in
+  [`pytorch_lightinig.ipynb`](./pytorch_lightinig.ipynb)
